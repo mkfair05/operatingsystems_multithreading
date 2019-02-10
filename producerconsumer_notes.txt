@@ -1,0 +1,46 @@
+What I need to do:
+
+
+    1. Model the problem/solution using pthreads with mutexes, condition variables.
+        --> a monitor is a synchronization construct that allows threads
+            to have both mutex and ability to wait/block for a condition to be true
+            -> condition variable -> a container of threads waiting for a condition
+            -> mutex/lock: enforce limits on access to a resource when there are many threads
+
+        --> must have at least two producers and two consumers
+
+        --> shared resource pool, int items=0;
+                --> items++, items--
+                --> enser items is never less than 0, and no more that MAX_ITEMS=10.
+        **DO WE NEED SPINLOCKS IN PTHREAD IMPLEMENTATION? OR JUST UTHREADS?**
+        --> use spinlocks 
+            --> double check value of items once holding the spinlock to handle
+                possible race conditions.
+            --> first spin on the condition without holding the lock, then get lock and
+                re-check the condition. Release lock and go back to first spinning step
+                if the condition no longer holds.
+        
+        --> count number of times threads have to wait with global variables
+            producer_wait_count and consumer_wait_count
+
+        --> maintain historgram of the values that items takes
+            --> use to ensure total number of changes to items equals the total number
+                of iterations of threads.
+    
+    2. Model problem/solution using uthreads
+
+        --> first use spinlocks 
+            --> double check value of items once holding the spinlock to handle
+                possible race conditions.
+            --> first spin on the condition without holding the lock, then get lock and
+                re-check the condition. Release lock and go back to first spinning step
+                if the condition no longer holds.
+
+        --> then use blocking
+
+    3. Testing
+        --> run large number of iterations of each thread
+        --> ensure 0<=items<=MAX_ITEMS never violated with assert statements
+        --> print values of counters and histogram when program terminates
+
+    
