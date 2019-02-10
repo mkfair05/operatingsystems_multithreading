@@ -1,0 +1,25 @@
+What to do:
+
+1. Create solution using pthreads - smoke_pthreads.c
+    -->create four threads
+    -->iterate
+        --> each iteration choose two resources randomly, signal condition variables, 
+            wait on condition variable (signal) that smokers able to smoke
+    --> agent has four condition variables
+        --> one to wait for smokers, 3 for resources (1 each - paper, tobacco, matches)
+        --> agent indicate resource available by calling resource's condition variable 
+
+
+
+
+2. Create solution using uthreads
+    --> code for agent provided for us
+
+3. Testing
+    --> use printf statements to know what each thread is doing
+        --> use before and after every statement that could block (every wait?)
+    --> put agrent through many iterations
+        --> have agent count the expected times each smoker should smoke
+        --> have each smoker count number of times that each smokes
+            --> compare numbers to ensure they're equal
+            --> print number when program terminates
