@@ -1,7 +1,10 @@
 What to do:
 
 1. Implement consumer producer method using semaphores in both pthreads and uthreads.
-    --> pc_sem_thread.c --> start from provided file in uthreads.
+    --> pc_sem_uthread.c --> start from provided file in uthreads.
     --> leave out wait counts out of implementations
     --> use semaphores to replace mutex and condition variables
-    -->only permitted to use wait and signal for synchronization primitives
+    --> only permitted to use wait and signal for synchronization primitives
+
+
+** use sem_wait() and sem_signal()
