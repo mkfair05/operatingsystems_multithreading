@@ -8,3 +8,45 @@ What to do:
 
 
 ** use sem_wait() and sem_signal()
+    **sem_post() unlocks a semaphore, sem_wait() locks semaphore
+    **where to find sem_signal()?
+
+** how to use sem_wait() and sem_signal() with incrementing and decrementing items?
+
+** semaphore = 0 when locked or in use, positive value when available.
+    ** general semaphores can be used to represent quantity of available resource
+        **can also be used to signal to thread1 that thread2 done
+        ** If you need to rendezvous among several
+            threads, you could have Thread1 wait several times, once for each of the threads that
+            will signal when ready. In this case, the semaphore is "counting" the number of times an
+            action occurred.
+    ** binary semaphore allow only one thread into critical section.
+
+int sem_init(sem_t *sem, int pshared, unsigned int value);
+// initializes unnamed semaphore at address pointed to by sem
+    // do I want to share semaphore between threads of a process or
+    // share between processes? -->pshared argument
+    //return 0 on success, -1 on error and errno set
+    //do i want one semphore? or a semaphore per producer / consumer?
+
+int sem_wait(sem_t *sem);
+// decrements(locks) the semaphore pointed to by sem
+    //if semaphore value greater than 0, decrement proceed and immediatly returns
+    //if semaphore 0, the call blocks until value rises above 0 or signal handler interrupt
+    // return 0 on success, -1 return and errno set on error
+
+int sem_post(sem_t *sem);
+// increments (unlock) the semaphore pointed to by sem. if value > 0, another blocked thread
+// will be woekn up
+    //return 0 on success, -1 return and errno set on error
+
+
+LINKS:
+
+https://docs.oracle.com/cd/E19455-01/806-5257/sync-15907/index.html
+
+https://www.thecrazyprogrammer.com/2016/09/producer-consumer-problem-c.html
+
+https://www.geeksforgeeks.org/producer-consumer-problem-using-semaphores-set-1/
+
+https://see.stanford.edu/materials/icsppcs107/23-Concurrency-Examples.pdf
