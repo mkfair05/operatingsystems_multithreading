@@ -131,6 +131,10 @@ int main (int argc, char** argv) {
     sum += histogram [i];
   }
   printf("  -------\n  total = %d\n", sum);
+
+  //TODO: sum is quadrupled with 4 threads. fix this
+    
   // assert (sum == sizeof (pthread_t) / sizeof (pthread_t) * NUM_ITERATIONS);
+  //printf("%lu \n",sizeof (pthread_t) / sizeof (pthread_t) * NUM_ITERATIONS);
   return 0;
 }
