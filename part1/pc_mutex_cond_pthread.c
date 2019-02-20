@@ -30,6 +30,8 @@ int histogram [MAX_ITEMS+1]; // histogram [i] == # of times list stored i items
 int items = 0;
 
 void* producer (void* v) {
+  char *message = (char*)v;
+  printf("%s \n", message);
   for (int i=0; i<NUM_ITERATIONS; i++) {
     // TODO
   }
@@ -37,6 +39,8 @@ void* producer (void* v) {
 }
 
 void* consumer (void* v) {
+  char *message = (char*)v;
+  printf("%s \n", message);
   for (int i=0; i<NUM_ITERATIONS; i++) {
     // TODO
   }
@@ -44,23 +48,43 @@ void* consumer (void* v) {
 }
 
 int main (int argc, char** argv) {
-    pthread_t cons1, prod1;  //start off with 2 threads
-    const char *message1 = "consumer 1";
-    const char *message2 = "producer 1";
-
-    // TODO: Create Threads and Join
-    pthread_create(&cons1, NULL, consumer, (void *)message1);
-    pthread_create(&prod1, NULL, producer, (void *)message2);
-
-        //start off with null attributes, may need to change
+  // pthread_t cons1, prod1;  //start off with 2 threads
+  const char *message1 = "consumer";
+  const char *message2 = "producer";
 
 
+  int i;
+  pthread_t consArr[NUM_CONSUMERS];
+  pthread_t prodArr[NUM_PRODUCERS];
+  float consID[NUM_CONSUMERS];
+  float prodID[NUM_PRODUCERS];
 
-    // printf ("items value histogram:\n");
-    // int sum=0;
-    // for (int i = 0; i <= MAX_ITEMS; i++) {
-    // printf ("  items=%d, %d times\n", i, histogram [i]);
-    // sum += histogram [i];
-    // }
-    // assert (sum == sizeof (t) / sizeof (pthread_t) * NUM_ITERATIONS);
+  for (i=0; i < NUM_CONSUMERS; i++) {
+    pthread_create(&consArr[i], NULL, consumer, (void *)message1);
+      //start off with null attributes, may need to change
+    // printf("created thread id=%lu\n", consArr[i]);
+  }
+
+  for (i=0; i < NUM_PRODUCERS; i++) {
+    pthread_create(&prodArr[i], NULL, producer, (void *)message2);
+      //start off with null attributes, may need to change    
+    // printf("created thread id=%lu\n", prodArr[i]);
+  }
+
+  for (i = 0; i < NUM_CONSUMERS; i++) {
+    pthread_join(consArr[i], NULL);
+  }
+
+  for (i = 0; i < NUM_PRODUCERS; i++) {
+    pthread_join(prodArr[i], NULL);
+  }
+
+  printf ("items value histogram:\n");
+  int sum=0;
+  for (int i = 0; i <= MAX_ITEMS; i++) {
+    printf ("  items=%d, %d times\n", i, histogram [i]);
+    sum += histogram [i];
+  }
+  // assert (sum == sizeof (consArr) / sizeof (pthread_t) * NUM_ITERATIONS);
+  return 0;
 }
