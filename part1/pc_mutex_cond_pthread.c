@@ -20,7 +20,7 @@
 #define producer_wait_count  //number of times producer has to wait
 #define consumer_wait_count  //number of times consumer has to wait
 #define MAX_ITEMS 10
-const int NUM_ITERATIONS = 50;
+const int NUM_ITERATIONS = 10;
 const int NUM_CONSUMERS  = 2;
 const int NUM_PRODUCERS  = 2;
 int histogram [MAX_ITEMS+1]; // histogram [i] == # of times list stored i items
@@ -32,7 +32,6 @@ typedef struct {
   pthread_cond_t can_consume; //signal when items added
   pthread_cond_t can_produce; //signal when items removed
 } producer_consumer_t;
-
 
 void inc () {
   items++;
@@ -52,44 +51,48 @@ void* producer (void* v) {
 
   for (int i=0; i<NUM_ITERATIONS; i++) {
     pthread_mutex_lock(&pc_t->mutex);
+    printf("Mutex Locked by producer\n");
 
-    if (pc_t->items == MAX_ITEMS) {  //items is full
+    while (items == MAX_ITEMS) {  //items is full
       pthread_cond_wait(&pc_t->can_produce, &pc_t->mutex);
+      printf("waiting for condition to produce\n");
     }
-
-    // pc_t->items++;
+    printf("incrementing\n");
     inc();
-    // addToHistogram(pc_t->items);
+
+    printf("Signal consumer that producer done\n");
+    pthread_cond_signal(&pc_t->can_consume);
+    pthread_mutex_unlock(&pc_t->mutex);
+    printf("Mutex unlocked by producer\n");
   }
-  // printf("%d\n", pc_t->items);
-  pthread_cond_signal(&pc_t->can_consume);
-  pthread_mutex_unlock(&pc_t->mutex);
   return NULL;
 }
 
 void* consumer (void* v) {
-  producer_consumer_t *pc_t = (producer_consumer_t*)v;
+  producer_consumer_t *pc_t = (producer_consumer_t*) v;
 
   for (int i=0; i<NUM_ITERATIONS; i++) {
     pthread_mutex_lock(&pc_t->mutex);
+    printf("Mutex Locked by consumer\n");
 
-    if (pc_t->items == 0) {  //items is empty
-      pthread_cond_wait(&pc_t->can_produce, &pc_t->mutex);
+    while (items == 0) {  //items is empty
+      pthread_cond_wait(&pc_t->can_consume, &pc_t->mutex);
+      printf("waiting for condition to consume\n");
     }
-
-    // pc_t->items--;
+    printf("decrementing\n");
     dec();
-  // printf("%d\n", pc_t->items);
-    // addToHistogram(pc_t->items);
+    printf("Signal producer that consumer done\n");
+    pthread_cond_signal(&pc_t->can_produce);
+    pthread_mutex_unlock(&pc_t->mutex);
+    printf("mutex unlocked by consumer\n");
   }
-  pthread_cond_signal(&pc_t->can_consume);
-  pthread_mutex_unlock(&pc_t->mutex);
   return NULL;
 }
 
 
 int main (int argc, char** argv) {
 
+  //initialize the data structure
   producer_consumer_t pc_t = {
     .items = 0,
     .mutex = PTHREAD_MUTEX_INITIALIZER,
@@ -108,8 +111,8 @@ int main (int argc, char** argv) {
   //   // printf("created thread id=%lu\n", consArr[i]);
   // }
   pthread_t cons, prod;
-  pthread_create(&cons, NULL, producer, (void*)&pc_t);
-  pthread_create(&prod, NULL, consumer, (void*)&pc_t);
+  pthread_create(&prod, NULL, producer, (void*)&pc_t);
+  pthread_create(&cons, NULL, consumer, (void*)&pc_t);
 
   // for (i = 0; i < NUM_CONSUMERS; i++) {
   //   pthread_join(consArr[i], NULL);
