@@ -17,74 +17,113 @@
 */
 
 
-
 #define producer_wait_count  //number of times producer has to wait
 #define consumer_wait_count  //number of times consumer has to wait
 #define MAX_ITEMS 10
-const int NUM_ITERATIONS = 200;
+const int NUM_ITERATIONS = 50;
 const int NUM_CONSUMERS  = 2;
 const int NUM_PRODUCERS  = 2;
-
 int histogram [MAX_ITEMS+1]; // histogram [i] == # of times list stored i items
-
 int items = 0;
 
+typedef struct {
+  int items; //number of items
+  pthread_mutex_t mutex; //to allow threads to add/remove items
+  pthread_cond_t can_consume; //signal when items added
+  pthread_cond_t can_produce; //signal when items removed
+} producer_consumer_t;
+
+
+void inc () {
+  items++;
+  printf("items: %d \n", items);
+}
+
+void dec () {
+  items--;
+  printf("items: %d \n", items);
+}
+
+void addToHistogram (int index) {
+  histogram[index]++;
+}
 void* producer (void* v) {
-  char *message = (char*)v;
-  printf("%s \n", message);
+  producer_consumer_t *pc_t = (producer_consumer_t*)v;
+
   for (int i=0; i<NUM_ITERATIONS; i++) {
-    // TODO
+    pthread_mutex_lock(&pc_t->mutex);
+
+    if (pc_t->items == MAX_ITEMS) {  //items is full
+      pthread_cond_wait(&pc_t->can_produce, &pc_t->mutex);
+    }
+
+    // pc_t->items++;
+    inc();
+    // addToHistogram(pc_t->items);
   }
+  // printf("%d\n", pc_t->items);
+  pthread_cond_signal(&pc_t->can_consume);
+  pthread_mutex_unlock(&pc_t->mutex);
   return NULL;
 }
 
 void* consumer (void* v) {
-  char *message = (char*)v;
-  printf("%s \n", message);
+  producer_consumer_t *pc_t = (producer_consumer_t*)v;
+
   for (int i=0; i<NUM_ITERATIONS; i++) {
-    // TODO
+    pthread_mutex_lock(&pc_t->mutex);
+
+    if (pc_t->items == 0) {  //items is empty
+      pthread_cond_wait(&pc_t->can_produce, &pc_t->mutex);
+    }
+
+    // pc_t->items--;
+    dec();
+  // printf("%d\n", pc_t->items);
+    // addToHistogram(pc_t->items);
   }
+  pthread_cond_signal(&pc_t->can_consume);
+  pthread_mutex_unlock(&pc_t->mutex);
   return NULL;
 }
 
+
 int main (int argc, char** argv) {
-  // pthread_t cons1, prod1;  //start off with 2 threads
-  const char *message1 = "consumer";
-  const char *message2 = "producer";
 
+  producer_consumer_t pc_t = {
+    .items = 0,
+    .mutex = PTHREAD_MUTEX_INITIALIZER,
+    .can_produce = PTHREAD_COND_INITIALIZER,
+    .can_consume = PTHREAD_COND_INITIALIZER
+  };
 
+  // pthread_t consArr[NUM_CONSUMERS];
+  // pthread_t prodArr[NUM_PRODUCERS];
+  // float consID[NUM_CONSUMERS];
+  // float prodID[NUM_PRODUCERS];
   int i;
-  pthread_t consArr[NUM_CONSUMERS];
-  pthread_t prodArr[NUM_PRODUCERS];
-  float consID[NUM_CONSUMERS];
-  float prodID[NUM_PRODUCERS];
 
-  for (i=0; i < NUM_CONSUMERS; i++) {
-    pthread_create(&consArr[i], NULL, consumer, (void *)message1);
-      //start off with null attributes, may need to change
-    // printf("created thread id=%lu\n", consArr[i]);
-  }
+  // for (i=0; i < NUM_CONSUMERS; i++) {
+  //     //start off with null attributes, may need to change
+  //   // printf("created thread id=%lu\n", consArr[i]);
+  // }
+  pthread_t cons, prod;
+  pthread_create(&cons, NULL, producer, (void*)&pc_t);
+  pthread_create(&prod, NULL, consumer, (void*)&pc_t);
 
-  for (i=0; i < NUM_PRODUCERS; i++) {
-    pthread_create(&prodArr[i], NULL, producer, (void *)message2);
-      //start off with null attributes, may need to change    
-    // printf("created thread id=%lu\n", prodArr[i]);
-  }
+  // for (i = 0; i < NUM_CONSUMERS; i++) {
+  //   pthread_join(consArr[i], NULL);
+  //   pthread_join(prodArr[i], NULL);
+  // }
+  pthread_join(cons, NULL);
+  pthread_join(prod, NULL);
 
-  for (i = 0; i < NUM_CONSUMERS; i++) {
-    pthread_join(consArr[i], NULL);
-  }
-
-  for (i = 0; i < NUM_PRODUCERS; i++) {
-    pthread_join(prodArr[i], NULL);
-  }
-
-  printf ("items value histogram:\n");
-  int sum=0;
-  for (int i = 0; i <= MAX_ITEMS; i++) {
-    printf ("  items=%d, %d times\n", i, histogram [i]);
-    sum += histogram [i];
-  }
+  // printf ("items value histogram:\n");
+  // int sum=0;
+  // for (int i = 0; i <= MAX_ITEMS; i++) {
+  //   printf ("  items=%d, %d times\n", i, histogram [i]);
+  //   sum += histogram [i];
+  // }
   // assert (sum == sizeof (consArr) / sizeof (pthread_t) * NUM_ITERATIONS);
   return 0;
 }
