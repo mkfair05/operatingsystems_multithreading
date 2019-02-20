@@ -106,10 +106,6 @@ int main (int argc, char** argv) {
     .can_consume = PTHREAD_COND_INITIALIZER
   };
 
-  // pthread_t consArr[NUM_CONSUMERS];
-  // pthread_t prodArr[NUM_PRODUCERS];
-  // float consID[NUM_CONSUMERS];
-  // float prodID[NUM_PRODUCERS];
   int i;
 
   pthread_t cons[NUM_CONSUMERS], prod[NUM_PRODUCERS];
