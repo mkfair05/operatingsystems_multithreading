@@ -1,7 +1,7 @@
 UTHREAD = .
-TARGETS = pc_mutex_cond_pthread
+TARGETS = pc_spinlock
 
-OBJS = $(UTHREAD)/pc_mutex_cond_pthread.o
+OBJS = $(UTHREAD)/pc_spinlock.o
 JUNKF = $(OBJS) *~
 JUNKD = *.dSYM
 CFLAGS  += -g -std=gnu11 -I$(UTHREAD)
