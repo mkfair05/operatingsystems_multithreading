@@ -26,17 +26,17 @@ const int NUM_PRODUCERS  = 2;
 int histogram [MAX_ITEMS+1]; // histogram [i] == # of times list stored i items
 int items = 0;
 pthread_mutex_t mutex; //to allow threads to add/remove items
-pthread_cond_t  can_consume; //signal when items added
-pthread_cond_t  can_produce; //signal when items removed
+// pthread_cond_t  cond; //signal when items added
+pthread_cond_t  cond; //signal when items removed
 
 void inc () {
   items++;
-  printf("items: %d \n", items);
+  // printf("items: %d \n", items);
 }
 
 void dec () {
   items--;
-  printf("items: %d \n", items);
+  // printf("items: %d \n", items);
 }
 
 void addToHistogram (int index) {
@@ -48,21 +48,21 @@ void* producer (void* v) {
 
   for (int i=0; i<NUM_ITERATIONS; i++) {
 
+    pthread_mutex_lock(&mutex);
     while (items == MAX_ITEMS) {  //items is full
-      printf("waiting to produce\n");
-      pthread_cond_wait(&can_produce, &mutex);
+      // printf("waiting to produce\n");
+      pthread_cond_wait(&cond, &mutex);
     }
 
-    pthread_mutex_lock(&mutex);
-    printf("Mutex Locked by producer\n");
-    printf("incrementing\n");
+    // printf("Mutex Locked by producer\n");
+    // printf("incrementing\n");
     inc();
     addToHistogram(items);
 
 
-    printf("Signal consumer that producer done\n");
-    pthread_cond_signal(&can_consume);
-    printf("Mutex unlocked by producer\n");
+    // printf("Signal that producer done\n");
+    pthread_cond_broadcast(&cond);
+    // printf("Mutex unlocked by producer\n");
     pthread_mutex_unlock(&mutex);
   }
   return NULL;
@@ -75,18 +75,18 @@ void* consumer (void* v) {
 
     pthread_mutex_lock(&mutex);
     while (items == 0) {  //items is empty
-      printf("waiting to consume\n");
-      pthread_cond_wait(&can_consume, &mutex);
+      // printf("waiting to consume\n");
+      pthread_cond_wait(&cond, &mutex);
     }
-    printf("Mutex Locked by consumer\n");
-    printf("decrementing\n");
+    // printf("Mutex Locked by consumer\n");
+    // printf("decrementing\n");
     dec();
     addToHistogram(items);
 
 
-    printf("Signal producer that consumer done\n");
-    pthread_cond_signal(&can_produce);
-    printf("mutex unlocked by consumer\n");
+    // printf("Signal that consumer done\n");
+    pthread_cond_broadcast(&cond);
+    // printf("mutex unlocked by consumer\n");
     pthread_mutex_unlock(&mutex);
   }
   return NULL;
@@ -96,8 +96,8 @@ void* consumer (void* v) {
 int main (int argc, char** argv) {
 
   pthread_mutex_init(&mutex, NULL);
-  pthread_cond_init(&can_consume, NULL);
-  pthread_cond_init(&can_produce, NULL);
+  pthread_cond_init(&cond, NULL);
+  pthread_cond_init(&cond, NULL);
   int i;
 
   pthread_t cons[NUM_CONSUMERS], prod[NUM_PRODUCERS];
