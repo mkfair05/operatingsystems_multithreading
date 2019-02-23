@@ -32,11 +32,11 @@ void addToHistogram(int index) {
 void* producer (void* v) {
     for (int i=0; i<NUM_ITERATIONS; i++) {
         
-        sem_wait(sem); //dec semaphore to 0 (blocks)
+        sem_wait(&sem); //dec semaphore to 0 (blocks)
         
         inc();
 
-        sem_post(sem); //inc semaphore to 1 (signals)
+        sem_post(&sem); //inc semaphore to 1 (signals)
         
     }
     return NULL;
@@ -46,7 +46,7 @@ void* consumer (void* v) {
     for (int i=0; i<NUM_ITERATIONS; i++) {
         sem_wait(&sem); //decrements/blocks semaphore
         
-        dec()
+        dec();
 
         sem_post(&sem); //inc/signal sempahore
     }
@@ -56,9 +56,8 @@ void* consumer (void* v) {
 int main (int argc, char** argv) {
     pthread_t t[4];
 
-    pthread_init (4);
     sem_init(&sem, 0, 1);
-
+    int i;
     for (i=0; i < NUM_CONSUMERS; i++) {
         //creates two consumers
         pthread_create(&t[i], NULL, consumer, NULL);
@@ -81,5 +80,5 @@ int main (int argc, char** argv) {
         printf ("  items=%d, %d times\n", i, histogram [i]);
         sum += histogram [i];
     }
-    assert (sum == sizeof (t) / sizeof (uthread_t) * NUM_ITERATIONS);
+    assert (sum == sizeof (t) / sizeof (pthread_t) * NUM_ITERATIONS);
 }
