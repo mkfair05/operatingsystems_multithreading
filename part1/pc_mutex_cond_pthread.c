@@ -48,6 +48,7 @@ void* producer (void* v) {
     
     while (items == MAX_ITEMS) {  //items is full
       //wait until there is some room in items before producing more
+      producer_wait_count++;
       pthread_cond_wait(&cond, &mutex);
     }
 
@@ -68,6 +69,7 @@ void* consumer (void* v) {
     
     while (items == 0) {  //items is empty
       // wait until there is some items that can be consumed 
+      consumer_wait_count++;
       pthread_cond_wait(&cond, &mutex);
     }
 
