@@ -38,37 +38,48 @@ void addToHistogram(int index) {
   histogram[index]++;
 }
 
-void produceItems() {
-  spinlock_lock(&spinLock);
+// void produceItems() {
+//   spinlock_lock(&spinLock);
 
-  while (items == MAX_ITEMS) {
-    producer_wait_count++;
-    spinlock_unlock(&spinLock);  //why unlock then lock again?
-    spinlock_lock(&spinLock);
-  }
-  inc();
-  addToHistogram(items);
-  spinlock_unlock(&spinLock);
-}
+//   while (items == MAX_ITEMS) {
+//     producer_wait_count++;
+//     spinlock_unlock(&spinLock);  //why unlock then lock again?
+//     spinlock_lock(&spinLock);
+//   }
+//   inc();
+//   addToHistogram(items);
+//   spinlock_unlock(&spinLock);
+// }
 
-void consumeItems() {
-  printf("locking in consumeItems");
-  spinlock_lock(&spinLock);
+// void consumeItems() {
+//   printf("locking in consumeItems");
+//   spinlock_lock(&spinLock);
 
-  while (items == 0) {
-    consumer_wait_count++;
-    spinlock_unlock(&spinLock);
-    spinlock_lock(&spinLock);
-  }
-  dec();
-  addToHistogram(items);
-  spinlock_unlock(&spinLock);
-}
+//   while (items == 0) {
+//     consumer_wait_count++;
+//     spinlock_unlock(&spinLock);
+//     spinlock_lock(&spinLock);
+//   }
+//   dec();
+//   addToHistogram(items);
+//   spinlock_unlock(&spinLock);
+// }
 
 void* producer (void* v) {
   printf("Inside consumer");
   for (int i=0; i<NUM_ITERATIONS; i++) {
-    produceItems();
+    // produceItems();
+    spinlock_lock(&spinLock);
+
+    while (items == MAX_ITEMS) {
+      producer_wait_count++;
+      spinlock_unlock(&spinLock);  //why unlock then lock again?
+      spinlock_lock(&spinLock);
+    }
+    inc();
+    addToHistogram(items);
+    spinlock_unlock(&spinLock);
+
   }
   return NULL;
 }
@@ -76,7 +87,17 @@ void* producer (void* v) {
 void* consumer (void* v) {
   printf("Inside consumer");
   for (int i=0; i<NUM_ITERATIONS; i++) {
-    consumeItems();
+    // consumeItems();
+    spinlock_lock(&spinLock);
+
+    while (items == 0) {
+      consumer_wait_count++;
+      spinlock_unlock(&spinLock);
+      spinlock_lock(&spinLock);
+    }
+    dec();
+    addToHistogram(items);
+    spinlock_unlock(&spinLock);
   }
   return NULL;
 }

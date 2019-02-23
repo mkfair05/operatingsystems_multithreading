@@ -17,26 +17,23 @@
 */
 
 
-#define producer_wait_count  //number of times producer has to wait
-#define consumer_wait_count  //number of times consumer has to wait
 #define MAX_ITEMS 10
 const int NUM_ITERATIONS = 5;
 const int NUM_CONSUMERS  = 2;
 const int NUM_PRODUCERS  = 2;
 int histogram [MAX_ITEMS+1]; // histogram [i] == # of times list stored i items
+int producer_wait_count = 0;  //number of times producer has to wait
+int consumer_wait_count = 0;  //number of times consumer has to wait
 int items = 0;
 pthread_mutex_t mutex; //to allow threads to add/remove items
-// pthread_cond_t  cond; //signal when items added
-pthread_cond_t  cond; //signal when items removed
+pthread_cond_t  cond; //condition variable for when items may be added or removed
 
 void inc () {
   items++;
-  // printf("items: %d \n", items);
 }
 
 void dec () {
   items--;
-  // printf("items: %d \n", items);
 }
 
 void addToHistogram (int index) {
@@ -44,49 +41,40 @@ void addToHistogram (int index) {
 }
 
 void* producer (void* v) {
-  // producer_consumer_t  = (producer_consumer_t*)v;
 
   for (int i=0; i<NUM_ITERATIONS; i++) {
 
     pthread_mutex_lock(&mutex);
+    
     while (items == MAX_ITEMS) {  //items is full
-      // printf("waiting to produce\n");
+      //wait until there is some room in items before producing more
       pthread_cond_wait(&cond, &mutex);
     }
 
-    // printf("Mutex Locked by producer\n");
-    // printf("incrementing\n");
     inc();
     addToHistogram(items);
 
-
-    // printf("Signal that producer done\n");
-    pthread_cond_broadcast(&cond);
-    // printf("Mutex unlocked by producer\n");
+    pthread_cond_broadcast(&cond); //broadcast condition variable status to all threads
     pthread_mutex_unlock(&mutex);
   }
   return NULL;
 }
 
 void* consumer (void* v) {
-  // producer_consumer_t  = (producer_consumer_t*) v;
 
   for (int i=0; i<NUM_ITERATIONS; i++) {
 
     pthread_mutex_lock(&mutex);
+    
     while (items == 0) {  //items is empty
-      // printf("waiting to consume\n");
+      // wait until there is some items that can be consumed 
       pthread_cond_wait(&cond, &mutex);
     }
-    // printf("Mutex Locked by consumer\n");
-    // printf("decrementing\n");
+
     dec();
     addToHistogram(items);
 
-
-    // printf("Signal that consumer done\n");
-    pthread_cond_broadcast(&cond);
-    // printf("mutex unlocked by consumer\n");
+    pthread_cond_broadcast(&cond); //broadcast condition variable status to all threads
     pthread_mutex_unlock(&mutex);
   }
   return NULL;
@@ -100,30 +88,32 @@ int main (int argc, char** argv) {
   pthread_cond_init(&cond, NULL);
   int i;
 
-  pthread_t cons[NUM_CONSUMERS], prod[NUM_PRODUCERS];
+  pthread_t t[NUM_CONSUMERS+NUM_PRODUCERS];
 
-  for (i=0; i < 2; i++) {
-    //creates two consumers and two producers
-    pthread_create(&prod[i], NULL, producer, 0);
-    pthread_create(&cons[i], NULL, consumer, 0);
+  for (i=0; i < NUM_CONSUMERS; i++) {
+    //creates two consumers
+    pthread_create(&t[i], NULL, consumer, NULL);
+  }
+  for (i=0; i < NUM_PRODUCERS; i++) {
+    //creates two producers
+    pthread_create(&t[i+NUM_CONSUMERS], NULL, producer, NULL);
   }
 
-  for (i = 0; i < 2; i++) {
-    pthread_join(cons[i], NULL);
-    pthread_join(prod[i], NULL);
+  for (i = 0; i < NUM_CONSUMERS+NUM_PRODUCERS; i++) {
+    void *joinThreads;
+    pthread_join(t[i], &joinThreads);
   }
 
+  printf ("producer_wait_count=%d\nconsumer_wait_count=%d\n", producer_wait_count, consumer_wait_count);
   printf ("\n\nitems value histogram:\n");
+
   int sum=0;
   for (int i = 0; i <= MAX_ITEMS; i++) {
     printf ("  items=%d, %d times\n", i, histogram [i]);
     sum += histogram [i];
   }
   printf("  -------\n  total = %d\n", sum);
-
-  //TODO: sum is quadrupled with 4 threads. fix this
     
-  assert (sum == sizeof (pthread_t) / sizeof (pthread_t) * NUM_ITERATIONS);
-  //printf("%lu \n",sizeof (pthread_t) / sizeof (pthread_t) * NUM_ITERATIONS);
+  assert (sum == sizeof (t) / sizeof (pthread_t) * NUM_ITERATIONS);
   return 0;
 }
