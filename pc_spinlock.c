@@ -49,6 +49,7 @@ void* producer (void* v) {
       spinlock_unlock(&spinLock);  //why unlock then lock again?
       spinlock_lock(&spinLock);
     }
+
     inc();
     addToHistogram(items);
     spinlock_unlock(&spinLock);
@@ -68,10 +69,12 @@ void* consumer (void* v) {
       spinlock_unlock(&spinLock);
       spinlock_lock(&spinLock);
     }
+
     dec();
     addToHistogram(items);
     spinlock_unlock(&spinLock);
   }
+  
   return NULL;
 }
 

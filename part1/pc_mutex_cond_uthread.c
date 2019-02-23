@@ -17,7 +17,7 @@
 */
 
 #define MAX_ITEMS 10
-const int NUM_ITERATIONS = 200;
+const int NUM_ITERATIONS = 20;
 const int NUM_CONSUMERS  = 2;
 const int NUM_PRODUCERS  = 2;
 
@@ -25,11 +25,38 @@ int producer_wait_count;     // # of times producer had to wait
 int consumer_wait_count;     // # of times consumer had to wait
 int histogram [MAX_ITEMS+1]; // histogram [i] == # of times list stored i items
 
+int items = 0;
+uthread_mutex_t mutex;
+uthread_cond_t cond;
 
-void* producer (void* pv) {
+void inc() {
+  items++;
+}
+
+void dec() {
+  items--;
+}
+
+void addToHistogram(int index) {
+  histogram[index]++;
+}
+
+void* producer (void* v) {
 
   for (int i=0; i<NUM_ITERATIONS; i++) {
 
+    uthread_mutex_lock(&mutex);
+
+    while (items == MAX_ITEMS) {
+        producer_wait_count++;
+        uthread_cond_wait(&cond);
+    }
+
+    inc();
+    addToHistogram(items);
+
+    uthread_cond_broadcast(&cond);
+    uthread_mutex_unlock(&mutex);
   }
   return NULL;
 }
@@ -37,29 +64,46 @@ void* producer (void* pv) {
 void* consumer (void* v) {
 
   for (int i=0; i<NUM_ITERATIONS; i++) {
-    
+
+    uthread_mutex_lock(&mutex);
+
+    while (items == 0) {
+        consumer_wait_count++;
+        uthread_cond_wait(&cond);
+    }
+
+    dec();
+    addToHistogram(items);
+
+    uthread_cond_broadcast(&cond);
+    uthread_mutex_unlock(&mutex);
   }
+  
   return NULL;
 }
 
 int main (int argc, char** argv) {
   uthread_t t[4];
-
+  int i;
   uthread_init (4);
-
-  for (int i=0; i<NUM_CONSUMERS; i++) {
-    t[i] = uthread_create(&consumer, 0);
+  mutex = uthread_mutex_create();
+  cond = uthread_cond_create(&mutex);
+  
+  for (i =0; i < NUM_CONSUMERS; i++) {
+    t[i] = uthread_create(&consumer, NULL);
   }
-  for (int i=0; i<NUM_PRODUCERS; i++) {
-    t[i+NUM_CONSUMERS] = uthread_create(&producer, 0);
+  for (i = 0; i < NUM_PRODUCERS; i++) {
+    t[i+NUM_CONSUMERS] = uthread_create(&producer, NULL);
   }
-
-  for (int i=0; i<NUM_CONSUMERS+NUM_PRODUCERS; i++) {
-    void *joinThreads;
-    uthread_join(t[i], &joinThreads);
+  for (i = 0; i < 4; i++) {
+    void *joinThread;
+    uthread_join(t[i], &joinThread);
   }
+  //free the memory
+  uthread_mutex_destroy(&mutex);
+  uthread_cond_destroy(&cond);
 
-  printf ("producer_wait_count=%d, consumer_wait_count=%d\n", producer_wait_count, consumer_wait_count);
+  printf ("producer_wait_count=%d\nconsumer_wait_count=%d\n", producer_wait_count, consumer_wait_count);
   printf ("items value histogram:\n");
   int sum=0;
   for (int i = 0; i <= MAX_ITEMS; i++) {
