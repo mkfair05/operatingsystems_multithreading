@@ -8,7 +8,7 @@
             "name": "(gdb) Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/part1/pc_mutex_cond_pthread",
+            "program": "${workspaceFolder}/smoke_pthread",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
