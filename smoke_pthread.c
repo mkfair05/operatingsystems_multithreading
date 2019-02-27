@@ -16,19 +16,15 @@
 
 typedef struct Agent {
   pthread_mutex_t agentMutex;
-  pthread_cond_t  match;
-  pthread_cond_t  paper;
-  pthread_cond_t  tobacco;
   pthread_cond_t  smokersDone;
+  bool runAgent;
 } Agent;
 
 Agent *createAgent() {
   Agent *agent = malloc (sizeof(Agent));
   pthread_mutex_init(&agent->agentMutex, NULL);
-  pthread_cond_init(&agent->match, NULL); //for when agent chooses match
-  pthread_cond_init(&agent->paper, NULL); //for when agent chooses paper
-  pthread_cond_init(&agent->tobacco, NULL); //for when agent chooses tobacco
   pthread_cond_init(&agent->smokersDone, NULL); //when smokers done smoking
+  agent->runAgent = true;  
   return agent;
 }
 
@@ -43,19 +39,30 @@ char* resource_name [] = {"", "match",   "paper", "", "tobacco"};
 int signal_count [5];  // # of times resource signalled
 int smoke_count  [5];  // # of times smoker with resource smoked
 
-int numIter = 0;
+int numIter = 0; //finish program when equal to NUM_ITERATIONS
+
+//Resource conditionals---------------
 bool haveMatch = false;
 bool havePaper = false;
 bool haveTobac = false;
+//------------------------------------
+
+//Actor conditionals------------------
 bool matchWillSmoke = false;
 bool paperWillSmoke = false;
 bool tobacWillSmoke = false;
+//------------------------------------
 
 Agent*  a;
 pthread_mutex_t smokerMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  matchAvail  = PTHREAD_COND_INITIALIZER;
 pthread_cond_t  paperAvail  = PTHREAD_COND_INITIALIZER;
 pthread_cond_t  tobacAvail  = PTHREAD_COND_INITIALIZER;
+
+pthread_cond_t  tobacSmoker = PTHREAD_COND_INITIALIZER;
+pthread_cond_t  matchSmoker = PTHREAD_COND_INITIALIZER;
+pthread_cond_t  paperSmoker = PTHREAD_COND_INITIALIZER;
+
 
 /**
  * This is the agent procedure.  It is complete and you shouldn't change it in
@@ -70,6 +77,11 @@ void* agentFunc (void* av) {
   
   for (int i = 0; i < NUM_ITERATIONS; i++) {
     pthread_mutex_lock(&a->agentMutex);
+    
+    while (!&a->runAgent) {
+      //wait until smokers done
+      pthread_cond_wait(&a->smokersDone, &a->agentMutex);
+    }
     int r = random() % 3;
     signal_count [matching_smoker [r]] ++;
     int c = choices [r];
@@ -95,6 +107,7 @@ void* agentFunc (void* av) {
     VERBOSE_PRINT ("agent is waiting for smoker to smoke\n");
     pthread_cond_wait (&a->smokersDone, &a->agentMutex);
     numIter = i;
+    a->runAgent = false;
     pthread_mutex_unlock(&a->agentMutex);
   }
   return NULL;
@@ -114,12 +127,14 @@ void* matchFunc (void* av) {
       //if paper and match available
       VERBOSE_PRINT("call the tobacco smoker\n");
       tobacWillSmoke = true;
+      pthread_cond_signal(&tobacSmoker);
     }
     
     if (haveTobac) {
       //if tobacco and match available
       VERBOSE_PRINT("call the paper smoker\n");
       paperWillSmoke = true;
+      pthread_cond_signal(&paperSmoker);
     }
 
     pthread_mutex_unlock(&smokerMutex);
@@ -139,11 +154,13 @@ void *paperFunc (void* av) {
       //if paper and match available
       VERBOSE_PRINT("call the tobacco smoker\n");
       tobacWillSmoke = true;
+      pthread_cond_signal(&tobacSmoker);
     }
     if (haveTobac) {
       //if paper and tobacco available
       VERBOSE_PRINT("call the match smoker\n");
       matchWillSmoke = true;
+      pthread_cond_signal(&matchSmoker);
     }
 
     pthread_mutex_unlock(&smokerMutex);
@@ -157,26 +174,87 @@ void* tobacFunc (void* av) {
     pthread_mutex_lock(&smokerMutex);
     
     while (!haveTobac) {
-      //wait until agent makes paper available
-      pthread_cond_wait(&paperAvail, &smokerMutex);
+      //wait until agent makes tobacco available
+      pthread_cond_wait(&tobacAvail, &smokerMutex);
     }
 
     if (haveMatch) {
       //if tobacco and match available
       VERBOSE_PRINT("call the paper smoker\n");
       paperWillSmoke = true;
+      pthread_cond_signal(&paperSmoker);
     }
 
     if (havePaper) {
       //if tobacco and paper available
       VERBOSE_PRINT("call the match smoker\n");
       matchWillSmoke = true;
+      pthread_cond_signal(&matchSmoker);
     }
 
     pthread_mutex_unlock(&smokerMutex);
 
   }
   return 0;
+}
+
+void resetBools () {
+  haveMatch = false;
+  havePaper = false;
+  haveTobac = false;
+  a->runAgent = true;
+}
+
+void* smokeTobacco (void* av) {
+  while (numIter < NUM_ITERATIONS) {
+    pthread_mutex_lock(&smokerMutex);
+
+    while (!tobacWillSmoke) {
+      //wait until tobacco smoker able to smoke
+      pthread_cond_wait(&tobacSmoker, &smokerMutex);
+    }
+
+    VERBOSE_PRINT("Tobacco smoker smoking\n");
+    //INCREMENT SMOKECOUNT ARRAY HERE
+    resetBools();
+    pthread_cond_signal(&a->smokersDone);
+    pthread_mutex_unlock(&smokerMutex);
+  }
+  return 0;
+}
+
+void* smokeMatch (void* av) {
+  while (numIter < NUM_ITERATIONS) {
+    pthread_mutex_lock(&smokerMutex);
+
+    while (!matchWillSmoke) {
+      //wait until match smoker able to smoke
+      pthread_cond_wait(&matchSmoker, &smokerMutex);
+    }
+
+    VERBOSE_PRINT("Match smoker smoking\n");
+    //INCREMENT SMOKECOUNT ARRAY HERE
+    resetBools();
+    pthread_cond_signal(&a->smokersDone);
+    pthread_mutex_unlock(&smokerMutex);
+  }
+}
+
+void* smokePaper (void* av) {
+  while (numIter < NUM_ITERATIONS) {
+    pthread_mutex_lock(&smokerMutex);
+
+    while (!paperWillSmoke) {
+      //wait until paper smoker able to smoke
+      pthread_cond_wait(&paperSmoker, &smokerMutex);
+    }
+
+    VERBOSE_PRINT("Paper smoker smoking\n");
+    //INCREMENT SMOKECOUNT ARRAY HERE
+    resetBools();
+    pthread_cond_signal(&a->smokersDone);
+    pthread_mutex_unlock(&smokerMutex);
+  }
 }
 
 int main (int argc, char** argv) {
