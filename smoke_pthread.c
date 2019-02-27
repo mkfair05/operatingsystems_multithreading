@@ -47,6 +47,10 @@ int numIter = 0;
 bool haveMatch = false;
 bool havePaper = false;
 bool haveTobac = false;
+bool matchWillSmoke = false;
+bool paperWillSmoke = false;
+bool tobacWillSmoke = false;
+
 Agent*  a;
 pthread_mutex_t smokerMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  matchAvail  = PTHREAD_COND_INITIALIZER;
@@ -97,29 +101,82 @@ void* agentFunc (void* av) {
 }
 
 void* matchFunc (void* av) {
-  Agent* a = av;
   while (numIter < NUM_ITERATIONS) {
     
     pthread_mutex_lock(&smokerMutex);
     
     while (!haveMatch) {
-      pthread_cond_wait(&tobacAvail, &smokerMutex);
+      //wait until agent makes match available
+      pthread_cond_wait(&matchAvail, &smokerMutex);
     }
 
     if (havePaper) {
-      havePaper = false;
-      VERBOSE_PRINT("call the match smoker\n");
-      pthread_cond_signal(&paperAvail);
+      //if paper and match available
+      VERBOSE_PRINT("call the tobacco smoker\n");
+      tobacWillSmoke = true;
     }
     
     if (haveTobac) {
-      haveTobac = false;
-      VERBOSE_PRINT("call the tobacco smoker\n");
-      pthread_cond_signal(&tobacAvail);
+      //if tobacco and match available
+      VERBOSE_PRINT("call the paper smoker\n");
+      paperWillSmoke = true;
     }
 
     pthread_mutex_unlock(&smokerMutex);
   }
+  return 0;
+}
+
+void *paperFunc (void* av) {
+  while (numIter < NUM_ITERATIONS) {
+    pthread_mutex_lock(&smokerMutex);
+    
+    while (!havePaper) {
+      //wait until agent makes paper available
+      pthread_cond_wait(&paperAvail, &smokerMutex);
+    }
+    if (haveMatch) {
+      //if paper and match available
+      VERBOSE_PRINT("call the tobacco smoker\n");
+      tobacWillSmoke = true;
+    }
+    if (haveTobac) {
+      //if paper and tobacco available
+      VERBOSE_PRINT("call the match smoker\n");
+      matchWillSmoke = true;
+    }
+
+    pthread_mutex_unlock(&smokerMutex);
+
+  }
+  return 0;
+}
+
+void* tobacFunc (void* av) {
+  while (numIter < NUM_ITERATIONS) {
+    pthread_mutex_lock(&smokerMutex);
+    
+    while (!haveTobac) {
+      //wait until agent makes paper available
+      pthread_cond_wait(&paperAvail, &smokerMutex);
+    }
+
+    if (haveMatch) {
+      //if tobacco and match available
+      VERBOSE_PRINT("call the paper smoker\n");
+      paperWillSmoke = true;
+    }
+
+    if (havePaper) {
+      //if tobacco and paper available
+      VERBOSE_PRINT("call the match smoker\n");
+      matchWillSmoke = true;
+    }
+
+    pthread_mutex_unlock(&smokerMutex);
+
+  }
+  return 0;
 }
 
 int main (int argc, char** argv) {
