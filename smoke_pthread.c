@@ -260,18 +260,17 @@ void* smokePaper (void* av) {
 int main (int argc, char** argv) {
   a = createAgent();
 
-  pthread_t agent, match;
-  // , paper, tobacco; 
+  pthread_t agent, match, paper, tobacco;
 
   pthread_create(&agent, NULL, agentFunc, (void*)&a);
-  pthread_create(&match, NULL, matchFunc, (void*)&a);
-  // pthread_create(&paper, NULL, smokerLock, (void*)&paperAvail);
-  // pthread_create(&tobacco, NULL, smokerLock, (void*)&tobacAvailco);
+  pthread_create(&match, NULL, matchFunc, NULL);
+  pthread_create(&paper, NULL, paperFunc, NULL);
+  pthread_create(&tobacco, NULL, tobacFunc, NULL);
 
   pthread_join (agent, NULL);
   pthread_join (match, NULL);
-  // pthread_join (paper, NULL);
-  // pthread_join (tobacco, NULL);
+  pthread_join (paper, NULL);
+  pthread_join (tobacco, NULL);
 
   assert (signal_count [MATCH]   == smoke_count [MATCH]);
   assert (signal_count [PAPER]   == smoke_count [PAPER]);
