@@ -6,7 +6,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 
-#define NUM_ITERATIONS 1000
+#define NUM_ITERATIONS 10
 
 #ifdef VERBOSE
 #define VERBOSE_PRINT(S, ...) printf (S, ##__VA_ARGS__);
@@ -118,9 +118,10 @@ void* smokerLock (void* av) {
   struct Agent* agent = smoker->agent;
 
   pthread_mutex_lock (&agent->mutex);
-  while (numIter < NUM_ITERATIONS) {
+  while (1) {
     //while loop runs the same amount of times as the agent
     if (smoker->smokeMethod == MATCH) {
+      VERBOSE_PRINT ("match smoker waiting for matches\n");
       pthread_cond_wait(&agent->match, &agent->mutex); //wait until agent decides match is available
       
       if (pool->tobacAvail && pool->paperAvail) {
@@ -128,17 +129,50 @@ void* smokerLock (void* av) {
         pool->tobacAvail = false;
         pool->paperAvail = false;
         smoke_count[smoker->smokeMethod]++;
+        VERBOSE_PRINT ("match smoking\n");
         pthread_cond_signal(&agent->smoke); //signal that match is smoking
       } else {
         pool->matchAvail = true;
       }
     
-    } else if (smoker->smokeMethod == PAPER) {
-      printf ("hiii");
-    } else if (smoker->smokeMethod == TOBACCO) {
-      printf("hello");
-    }
+    }else if (smoker->smokeMethod == PAPER) {
+      VERBOSE_PRINT ("paper smoker waiting for paper\n"); 
+      pthread_cond_wait(&agent->paper, &agent->mutex);
+      
+      if (pool->matchAvail && pool->tobacAvail) {
+        //paper smoker has all resources needed
+        pool->matchAvail = false;
+        pool->tobacAvail = false;
+        smoke_count[smoker->smokeMethod]++;
+        VERBOSE_PRINT ("paper smoking\n");
+        pthread_cond_signal(&agent->smoke); //signal that paper is smoking
+      } else {
+        pool->paperAvail = true;
+      }
 
+    }else if (smoker->smokeMethod == TOBACCO) {
+      VERBOSE_PRINT ("tobacco smoker waiting for tobacco\n");
+      pthread_cond_wait(&agent->tobacco, &agent->mutex);
+
+      if (pool->matchAvail && pool->paperAvail) {
+        //tobacco smoker has all resources needed
+        pool->matchAvail = false;
+        pool->paperAvail = false;
+        smoke_count[smoker->smokeMethod]++;
+        VERBOSE_PRINT ("tobacco smoking\n");
+        pthread_cond_signal(&agent->smoke); //signal that tobacco is smoking
+      } else {
+        pool->tobacAvail = true;
+      }
+
+    }
+    if (pool->matchAvail && pool->paperAvail) {
+      pthread_cond_signal(&agent->tobacco);
+    } else if (pool->matchAvail && pool->tobacAvail) {
+      pthread_cond_signal(&agent->paper);
+    } else if (pool->paperAvail && pool->tobacAvail) {
+      pthread_cond_signal(&agent->match);
+    }
   }
   pthread_mutex_unlock(&agent->mutex);
 }
@@ -148,16 +182,21 @@ int main (int argc, char** argv) {
   struct Agent* a = createAgent();
   //all smokers have access to one resource pool
   struct ResourcePool* pool = createResourcePool();
+  struct Smoker* matchS = createSmoker(MATCH, pool, a);
+  struct Smoker* paperS = createSmoker(PAPER, pool, a);
+  struct Smoker* tobacS = createSmoker(TOBACCO, pool, a);
 
-  pthread_t agent, match;
-  pthread_create(&match, NULL, smokerLock, createSmoker(MATCH, pool, a));
-
-
+  pthread_t agent, match, paper, tobacco;
   pthread_join (pthread_create(&agent, NULL, agentLock, (void*)a), NULL);
-  assert (signal_count [MATCH]   == smoke_count [MATCH]);
-  assert (signal_count [PAPER]   == smoke_count [PAPER]);
-  assert (signal_count [TOBACCO] == smoke_count [TOBACCO]);
-  assert (smoke_count [MATCH] + smoke_count [PAPER] + smoke_count [TOBACCO] == NUM_ITERATIONS);
-  printf ("Smoke counts: %d matches, %d paper, %d tobacco\n",
-          smoke_count [MATCH], smoke_count [PAPER], smoke_count [TOBACCO]);
+  pthread_join(pthread_create(&match, NULL, smokerLock, matchS), NULL);
+  pthread_join(pthread_create(&paper, NULL, smokerLock, paperS), NULL);
+  pthread_join(pthread_create(&tobacco, NULL, smokerLock, tobacS), NULL);
+
+  
+  // assert (signal_count [MATCH]   == smoke_count [MATCH]);
+  // assert (signal_count [PAPER]   == smoke_count [PAPER]);
+  // assert (signal_count [TOBACCO] == smoke_count [TOBACCO]);
+  // assert (smoke_count [MATCH] + smoke_count [PAPER] + smoke_count [TOBACCO] == NUM_ITERATIONS);
+  // printf ("Smoke counts: %d matches, %d paper, %d tobacco\n",
+  //         smoke_count [MATCH], smoke_count [PAPER], smoke_count [TOBACCO]);
 }
