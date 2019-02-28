@@ -75,13 +75,10 @@ void* agentFunc (void* av) {
   static const int choices[]         = {MATCH|PAPER, MATCH|TOBACCO, PAPER|TOBACCO};
   static const int matching_smoker[] = {TOBACCO,     PAPER,         MATCH};
   
+  VERBOSE_PRINT ("locking agent mutex\n");
+  pthread_mutex_lock(&a->agentMutex);
   for (int i = 0; i < NUM_ITERATIONS; i++) {
-    pthread_mutex_lock(&a->agentMutex);
-    
-    while (!&a->runAgent) {
-      //wait until smokers done
-      pthread_cond_wait(&a->smokersDone, &a->agentMutex);
-    }
+
     int r = random() % 3;
     signal_count [matching_smoker [r]] ++;
     int c = choices [r];
@@ -108,24 +105,30 @@ void* agentFunc (void* av) {
     pthread_cond_wait (&a->smokersDone, &a->agentMutex);
     numIter = i;
     a->runAgent = false;
-    pthread_mutex_unlock(&a->agentMutex);
+    VERBOSE_PRINT("unlocking agent mutex\n");
+
   }
+  pthread_mutex_unlock(&a->agentMutex);
   return NULL;
 }
 
 void* matchFunc (void* av) {
+  VERBOSE_PRINT("inside matchfunc\n");
   while (numIter < NUM_ITERATIONS) {
+    VERBOSE_PRINT("mathcfunc locking smoker mutex\n");
     
     pthread_mutex_lock(&smokerMutex);
     
-    while (!haveMatch) {
+    while (haveMatch == false) {
       //wait until agent makes match available
+      VERBOSE_PRINT("waiting for matches to be made available\n");
       pthread_cond_wait(&matchAvail, &smokerMutex);
     }
 
     if (havePaper) {
       //if paper and match available
       VERBOSE_PRINT("call the tobacco smoker\n");
+      havePaper = false;
       tobacWillSmoke = true;
       pthread_cond_signal(&tobacSmoker);
     }
@@ -133,9 +136,11 @@ void* matchFunc (void* av) {
     if (haveTobac) {
       //if tobacco and match available
       VERBOSE_PRINT("call the paper smoker\n");
+      haveTobac = false;
       paperWillSmoke = true;
       pthread_cond_signal(&paperSmoker);
     }
+    VERBOSE_PRINT("matchfunc unlocking smoker mutex\n");
 
     pthread_mutex_unlock(&smokerMutex);
   }
@@ -143,25 +148,34 @@ void* matchFunc (void* av) {
 }
 
 void *paperFunc (void* av) {
+  VERBOSE_PRINT("inside paperfunc\n");
+
   while (numIter < NUM_ITERATIONS) {
+    VERBOSE_PRINT("paperfunc locking smoker mutex\n");
+
     pthread_mutex_lock(&smokerMutex);
     
-    while (!havePaper) {
+    while (havePaper == false) {
       //wait until agent makes paper available
+      VERBOSE_PRINT("waiting for paper\n");
       pthread_cond_wait(&paperAvail, &smokerMutex);
+
     }
     if (haveMatch) {
       //if paper and match available
       VERBOSE_PRINT("call the tobacco smoker\n");
+      haveMatch = false;
       tobacWillSmoke = true;
       pthread_cond_signal(&tobacSmoker);
     }
     if (haveTobac) {
       //if paper and tobacco available
       VERBOSE_PRINT("call the match smoker\n");
+      haveTobac = false;
       matchWillSmoke = true;
       pthread_cond_signal(&matchSmoker);
     }
+    VERBOSE_PRINT("paperfunc unlocking smoker mutex\n");
 
     pthread_mutex_unlock(&smokerMutex);
 
@@ -170,17 +184,22 @@ void *paperFunc (void* av) {
 }
 
 void* tobacFunc (void* av) {
+  VERBOSE_PRINT("inside tobacco func\n");
+
   while (numIter < NUM_ITERATIONS) {
+    VERBOSE_PRINT("tobacfunc locking smoker mutex\n");
     pthread_mutex_lock(&smokerMutex);
     
-    while (!haveTobac) {
+    while (haveTobac == false) {
       //wait until agent makes tobacco available
-      pthread_cond_wait(&tobacAvail, &smokerMutex);
+      VERBOSE_PRINT("waiting for tobacco\n");
+      pthread_cond_wait(&tobacAvail, &smokerMutex);  //DEADLOCK HERE
     }
 
     if (haveMatch) {
       //if tobacco and match available
       VERBOSE_PRINT("call the paper smoker\n");
+      haveMatch = false;
       paperWillSmoke = true;
       pthread_cond_signal(&paperSmoker);
     }
@@ -188,9 +207,11 @@ void* tobacFunc (void* av) {
     if (havePaper) {
       //if tobacco and paper available
       VERBOSE_PRINT("call the match smoker\n");
+      havePaper = false;
       matchWillSmoke = true;
       pthread_cond_signal(&matchSmoker);
     }
+    VERBOSE_PRINT("tobacfunc unlocking smoker mutex\n");
 
     pthread_mutex_unlock(&smokerMutex);
 
@@ -206,7 +227,9 @@ void resetBools () {
 }
 
 void* smokeTobacco (void* av) {
+  VERBOSE_PRINT("inside smokeTobaccon\n");
   while (numIter < NUM_ITERATIONS) {
+    VERBOSE_PRINT("locking smoker mutex for tobacco to smoke\n");
     pthread_mutex_lock(&smokerMutex);
 
     while (!tobacWillSmoke) {
@@ -261,16 +284,24 @@ int main (int argc, char** argv) {
   a = createAgent();
 
   pthread_t agent, match, paper, tobacco;
-
+  VERBOSE_PRINT("creating pthreads\n");
   pthread_create(&agent, NULL, agentFunc, (void*)&a);
   pthread_create(&match, NULL, matchFunc, NULL);
   pthread_create(&paper, NULL, paperFunc, NULL);
   pthread_create(&tobacco, NULL, tobacFunc, NULL);
+  VERBOSE_PRINT("joining threads\n");
+  void* joinThreads;
+  pthread_join (agent, &joinThreads);
+  VERBOSE_PRINT("agent joined\n");
+  pthread_join (match, &joinThreads);
+  VERBOSE_PRINT("match joined\n");
 
-  pthread_join (agent, NULL);
-  pthread_join (match, NULL);
-  pthread_join (paper, NULL);
-  pthread_join (tobacco, NULL);
+  pthread_join (paper, &joinThreads);
+  VERBOSE_PRINT("paper joined\n");
+
+  pthread_join (tobacco, &joinThreads);
+  VERBOSE_PRINT("tobacco joined\n");
+
 
   assert (signal_count [MATCH]   == smoke_count [MATCH]);
   assert (signal_count [PAPER]   == smoke_count [PAPER]);
