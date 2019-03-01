@@ -15,7 +15,7 @@ int histogram [MAX_ITEMS+1]; // histogram [i] == # of times list stored i items
 
 int items = 0;
 
-sem_t sem;
+sem_t semLock, isFull, isEmpty;
 
 void inc() {
     items++;
@@ -31,24 +31,30 @@ void addToHistogram(int index) {
 
 void* producer (void* v) {
     for (int i=0; i<NUM_ITERATIONS; i++) {
+        sem_wait(&isFull);
+        sem_wait(&semLock); //dec semaphore to 0 (blocks)
         
-        sem_wait(sem); //dec semaphore to 0 (blocks)
-        
+        // assert(items < MAX_ITEMS);
         inc();
+        addToHistogram(items);
 
-        sem_post(sem); //inc semaphore to 1 (signals)
-        
+        sem_post(&isFull);
+        sem_post(&semLock); //inc semaphore to 1 (signals)
     }
     return NULL;
 }
 
 void* consumer (void* v) {
     for (int i=0; i<NUM_ITERATIONS; i++) {
-        sem_wait(&sem); //decrements/blocks semaphore
+        sem_wait(&isEmpty);
+        sem_wait(&semLock); //decrements/blocks semaphore
         
-        dec()
+        
+        dec();
+        addToHistogram(items);
 
-        sem_post(&sem); //inc/signal sempahore
+        sem_post(&isEmpty);
+        sem_post(&semLock); //inc/signal sempahore
     }
     return NULL;
 }
@@ -56,9 +62,11 @@ void* consumer (void* v) {
 int main (int argc, char** argv) {
     pthread_t t[4];
 
-    pthread_init (4);
-    sem_init(&sem, 0, 1);
+    sem_init(&semLock, 0, 1);
+    sem_init(&isFull, 0, MAX_ITEMS);
+    sem_init(&isEmpty, 0, 0);
 
+    int i;
     for (i=0; i < NUM_CONSUMERS; i++) {
         //creates two consumers
         pthread_create(&t[i], NULL, consumer, NULL);
@@ -81,5 +89,5 @@ int main (int argc, char** argv) {
         printf ("  items=%d, %d times\n", i, histogram [i]);
         sum += histogram [i];
     }
-    assert (sum == sizeof (t) / sizeof (uthread_t) * NUM_ITERATIONS);
+    assert (sum == sizeof (t) / sizeof (pthread_t) * NUM_ITERATIONS);
 }
