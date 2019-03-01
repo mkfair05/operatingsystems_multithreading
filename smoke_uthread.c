@@ -7,6 +7,19 @@
 #include "uthread.h"
 #include "uthread_mutex_cond.h"
 
+/*
+* Meghan Fair
+* V00839675
+* 
+* UVic CSC 360 - Spring 2019
+* Assignment 2 - part 2 "The Smokers Problem"
+*
+* Implementation of the smokers problem using uthreads using
+* mutexes and condition variables.
+*
+*/
+
+
 #define NUM_ITERATIONS 1000
 
 #ifdef VERBOSE
