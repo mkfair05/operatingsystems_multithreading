@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include "uthread.h"
 #include "uthread_mutex_cond.h"
 
@@ -22,6 +23,23 @@ struct Agent {
   uthread_cond_t  smoke;
 };
 
+struct Smoker {
+  struct ResourcePool* pool;
+  int smokeMethod;
+  struct Agent* agent;
+};
+
+struct ResourcePool {
+  struct Agent* agent;
+  bool matchAvail;
+  bool paperAvail;
+  bool tobacAvail;
+  bool waitingToSmoke;
+  bool matchWaiting;
+  bool tobacWaiting;
+  bool paperWaiting;
+};
+
 struct Agent* createAgent() {
   struct Agent* agent = malloc (sizeof (struct Agent));
   agent->mutex   = uthread_mutex_create();
@@ -32,10 +50,26 @@ struct Agent* createAgent() {
   return agent;
 }
 
-//
-// TODO
-// You will probably need to add some procedures and struct etc.
-//
+struct Smoker* createSmoker (int type, struct ResourcePool* pool, struct Agent* a) {
+  struct Smoker* smoker = malloc (sizeof(struct Smoker));
+  smoker->pool = pool;
+  smoker->smokeMethod = type;
+  smoker->agent = a;
+  return smoker;
+}
+
+struct ResourcePool* createResourcePool (struct Agent* a) {
+  struct ResourcePool* pool = malloc (sizeof(struct ResourcePool));
+  pool->agent = a;
+  pool->matchAvail = false;
+  pool->paperAvail = false;
+  pool->tobacAvail = false;
+  pool->waitingToSmoke = true;
+  pool->matchWaiting = false;
+  pool->paperWaiting = false;
+  pool->tobacWaiting = false;
+  return pool;
+}
 
 /**
  * You might find these declarations helpful.
@@ -47,6 +81,19 @@ char* resource_name [] = {"", "match",   "paper", "", "tobacco"};
 
 int signal_count [5];  // # of times resource signalled
 int smoke_count  [5];  // # of times smoker with resource smoked
+int numIter = 0;
+
+void resetWaitingValues(struct ResourcePool* pool) {
+  pool->paperWaiting = false;
+  pool->matchWaiting = false;
+  pool->tobacWaiting = false;
+}
+
+void resetValues (struct ResourcePool* pool) {
+  pool->tobacAvail = false;
+  pool->paperAvail = false;
+  pool->matchAvail = false;
+}
 
 /**
  * This is the agent procedure.  It is complete and you shouldn't change it in
@@ -55,27 +102,42 @@ int smoke_count  [5];  // # of times smoker with resource smoked
  * wait for a smoker to smoke.
  */
 void* agent (void* av) {
-  struct Agent* a = av;
+  struct ResourcePool* pool = av;
+  struct Agent* a = pool->agent;
+  
   static const int choices[]         = {MATCH|PAPER, MATCH|TOBACCO, PAPER|TOBACCO};
   static const int matching_smoker[] = {TOBACCO,     PAPER,         MATCH};
   
   uthread_mutex_lock (a->mutex);
+
     for (int i = 0; i < NUM_ITERATIONS; i++) {
+      numIter = i;
+      VERBOSE_PRINT("\nIteration: %d\n----------\n", i);
+      resetWaitingValues(pool);    
+      
       int r = random() % 3;
       signal_count [matching_smoker [r]] ++;
       int c = choices [r];
+     
+     
       if (c & MATCH) {
         VERBOSE_PRINT ("match available\n");
+        pool->matchAvail = true;
         uthread_cond_signal (a->match);
       }
+
       if (c & PAPER) {
         VERBOSE_PRINT ("paper available\n");
+        pool->paperAvail = true;
         uthread_cond_signal (a->paper);
       }
+
       if (c & TOBACCO) {
         VERBOSE_PRINT ("tobacco available\n");
+        pool->tobacAvail = true;
         uthread_cond_signal (a->tobacco);
       }
+      
       VERBOSE_PRINT ("agent is waiting for smoker to smoke\n");
       uthread_cond_wait (a->smoke);
     }
@@ -83,11 +145,94 @@ void* agent (void* av) {
   return NULL;
 }
 
+void* smoker (void* pv) {
+  struct Smoker* smoker = pv;
+  struct ResourcePool* pool = smoker->pool;
+  struct Agent* agent = smoker->agent;
+
+  uthread_mutex_lock(agent->mutex);
+  
+  while(1) {
+
+    if (smoker->smokeMethod == MATCH) {
+
+      if (pool->tobacAvail && pool->paperAvail) {
+        //match smoker has all resources needed
+        VERBOSE_PRINT ("Match can smoke!\n");
+        resetValues(pool);
+        smoke_count[smoker->smokeMethod]++;
+        pool->waitingToSmoke = false;
+        VERBOSE_PRINT ("match smoking\n");
+        uthread_cond_signal(agent->smoke);
+      } else {
+        VERBOSE_PRINT ("match smoker waiting\n");
+        pool->matchWaiting = true;
+        uthread_cond_wait(agent->match);
+      }
+
+    } else if (smoker->smokeMethod == PAPER) {
+
+      if (pool->matchAvail && pool->tobacAvail) {
+        //paper smoker has all resources needed
+        VERBOSE_PRINT ("paper can smoke!\n");
+        resetValues(pool);
+        smoke_count[smoker->smokeMethod]++;
+        pool->waitingToSmoke = false;
+        VERBOSE_PRINT ("paper smoking\n");
+        uthread_cond_signal(agent->smoke);
+      } else {
+        VERBOSE_PRINT ("paper smoker waiting\n"); 
+        pool->paperWaiting = true;
+        uthread_cond_wait(agent->paper);
+      }
+
+    } else if (smoker->smokeMethod == TOBACCO) {
+
+      if (pool->matchAvail && pool->paperAvail) {
+        //tobacco smoker has all resources needed
+        VERBOSE_PRINT ("Tobacco can smoke!\n");
+        resetValues(pool);
+        smoke_count[smoker->smokeMethod]++;
+        pool->waitingToSmoke = false;
+        VERBOSE_PRINT ("tobacco smoking\n");
+        uthread_cond_signal(agent->smoke);
+      } else {
+        VERBOSE_PRINT ("tobacco smoker waiting\n");
+        pool->tobacWaiting = true;
+        uthread_cond_wait(agent->tobacco);
+      }
+    }
+
+    if (pool->matchWaiting && pool->paperWaiting && pool->tobacWaiting && (numIter == NUM_ITERATIONS)) {
+      //end of iterations, go back to main
+      break;
+    } else {
+      if (pool->matchAvail && pool->paperAvail) {
+        VERBOSE_PRINT("signalling tobacco\n");
+        uthread_cond_signal(agent->tobacco);
+      } else if (pool->matchAvail && pool->tobacAvail) {
+        VERBOSE_PRINT ("signalling paper\n");
+        uthread_cond_signal(agent->paper);
+      } else if (pool->paperAvail && pool->tobacAvail) {
+        VERBOSE_PRINT ("signalling match\n");
+        uthread_cond_signal(agent->match);
+      }
+    }
+  }
+  
+  uthread_mutex_unlock(agent->mutex);
+}
+
 int main (int argc, char** argv) {
   uthread_init (7);
   struct Agent*  a = createAgent();
+  struct ResourcePool* p = createResourcePool(a);
   // TODO
-  uthread_join (uthread_create (agent, a), 0);
+  uthread_t tobac = uthread_create(smoker, createSmoker(TOBACCO, p, a));
+  uthread_t paper = uthread_create(smoker, createSmoker(PAPER, p, a));
+  uthread_t match = uthread_create(smoker, createSmoker(MATCH, p, a));
+  uthread_join (uthread_create (agent, p), 0);
+
   assert (signal_count [MATCH]   == smoke_count [MATCH]);
   assert (signal_count [PAPER]   == smoke_count [PAPER]);
   assert (signal_count [TOBACCO] == smoke_count [TOBACCO]);

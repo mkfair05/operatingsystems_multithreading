@@ -101,16 +101,19 @@ void resetValues (struct ResourcePool* pool) {
  * wait for a smoker to smoke.
  */
 void* agentLock (void* pv) {
-  // struct Agent* a = av;
   struct ResourcePool* pool = pv;
   struct Agent* a = pool->agent;
+
   static const int choices[]         = {MATCH|PAPER, MATCH|TOBACCO, PAPER|TOBACCO};
   static const int matching_smoker[] = {TOBACCO,     PAPER,         MATCH};
   
   pthread_mutex_lock(&a->mutex);
+
   for (int i = 0; i < NUM_ITERATIONS; i++) {
+    numIter = i;
     VERBOSE_PRINT("\nIteration: %d\n----------\n", i);
     resetWaitingValues(pool);
+    
     int r = random() % 3;
     signal_count [matching_smoker [r]] ++;
     int c = choices [r];
@@ -133,7 +136,6 @@ void* agentLock (void* pv) {
       pthread_cond_signal (&a->tobacco);
     }
     
-    numIter++;
     VERBOSE_PRINT ("agent is waiting for smoker to smoke\n"); 
     pthread_cond_wait (&a->smoke, &a->mutex);
   }
@@ -147,8 +149,8 @@ void* smokerLock (void* av) {
   struct Agent* agent = smoker->agent;
 
   pthread_mutex_lock (&agent->mutex);
+
   while (1) {
-    //while loop runs the same amount of times as the agent
     if (smoker->smokeMethod == MATCH) {
       
       if (pool->tobacAvail && pool->paperAvail) {
@@ -159,6 +161,7 @@ void* smokerLock (void* av) {
         pool->waitingToSmoke = false;
         VERBOSE_PRINT ("match smoking\n");
         pthread_cond_signal(&agent->smoke); //signal that match is smoking
+      
       } else {
         VERBOSE_PRINT ("match smoker waiting\n");
         pool->matchWaiting = true;
@@ -198,6 +201,7 @@ void* smokerLock (void* av) {
       }
 
     }
+
     if (pool->matchWaiting && pool->paperWaiting && pool->tobacWaiting && (numIter == NUM_ITERATIONS)) {
       //end of iterations, go back to main
       break;
@@ -214,12 +218,11 @@ void* smokerLock (void* av) {
       }
     }
   }
+
   pthread_mutex_unlock(&agent->mutex);
-  return NULL;
 }
 
 int main (int argc, char** argv) {
-  
   //all smokers have access to one agent, which holds the mutex and all condition variables
   struct Agent* a = createAgent();
 
@@ -233,9 +236,9 @@ int main (int argc, char** argv) {
   pthread_create(&tobacco, NULL, smokerLock, createSmoker(TOBACCO, pool, a));
 
   pthread_join(agent, NULL);
-  pthread_join(match, NULL);
-  pthread_join(paper, NULL);
-  pthread_join(tobacco, NULL);
+  // pthread_join(match, NULL);
+  // pthread_join(paper, NULL);
+  // pthread_join(tobacco, NULL);
   
   assert (signal_count [MATCH]   == smoke_count [MATCH]);
   assert (signal_count [PAPER]   == smoke_count [PAPER]);
