@@ -1,7 +1,8 @@
 UTHREAD = .
-TARGETS = pc_mutex_cond smoke_ smoke_uthread
-
-OBJS = $(UTHREAD)/uthread.o $(UTHREAD)/uthread_mutex_cond.o $(UTHREAD)/uthread_sem.o $(UTHREAD)/smoke_uthread.o
+TARGETS = smoke_pthread
+# TARGETS = pc_mutex_cond smoke_ smoke_uthread
+OBJS = $(UTHREAD)/smoke_pthread.o
+# OBJS = $(UTHREAD)/uthread.o $(UTHREAD)/uthread_mutex_cond.o $(UTHREAD)/uthread_sem.o $(UTHREAD)/smoke_uthread.o
 JUNKF = $(OBJS) *~
 JUNKD = *.dSYM
 CFLAGS  += -g -std=gnu11 -D VERBOSE -I$(UTHREAD)

@@ -141,10 +141,19 @@ void* agent (void* av) {
       VERBOSE_PRINT ("agent is waiting for smoker to smoke\n");
       uthread_cond_wait (a->smoke);
     }
+
   uthread_mutex_unlock (a->mutex);
   return NULL;
 }
 
+/*
+* The smoker procedure recieves signals from the agent that resources
+* are available. If two resources are available, and the smoker with the 
+* third resource is called, then that smoker gets to smoke while the other
+* two smokers and the agent wait.
+* Once done smoker, the smoker signals the agent that he/she can choose
+* the next set of resources.
+*/
 void* smoker (void* pv) {
   struct Smoker* smoker = pv;
   struct ResourcePool* pool = smoker->pool;
@@ -164,6 +173,7 @@ void* smoker (void* pv) {
         pool->waitingToSmoke = false;
         VERBOSE_PRINT ("match smoking\n");
         uthread_cond_signal(agent->smoke);
+      
       } else {
         VERBOSE_PRINT ("match smoker waiting\n");
         pool->matchWaiting = true;
@@ -180,6 +190,7 @@ void* smoker (void* pv) {
         pool->waitingToSmoke = false;
         VERBOSE_PRINT ("paper smoking\n");
         uthread_cond_signal(agent->smoke);
+      
       } else {
         VERBOSE_PRINT ("paper smoker waiting\n"); 
         pool->paperWaiting = true;
@@ -187,7 +198,7 @@ void* smoker (void* pv) {
       }
 
     } else if (smoker->smokeMethod == TOBACCO) {
-
+      
       if (pool->matchAvail && pool->paperAvail) {
         //tobacco smoker has all resources needed
         VERBOSE_PRINT ("Tobacco can smoke!\n");
@@ -196,6 +207,7 @@ void* smoker (void* pv) {
         pool->waitingToSmoke = false;
         VERBOSE_PRINT ("tobacco smoking\n");
         uthread_cond_signal(agent->smoke);
+
       } else {
         VERBOSE_PRINT ("tobacco smoker waiting\n");
         pool->tobacWaiting = true;
@@ -204,34 +216,46 @@ void* smoker (void* pv) {
     }
 
     if (pool->matchWaiting && pool->paperWaiting && pool->tobacWaiting && (numIter == NUM_ITERATIONS)) {
-      //end of iterations, go back to main
+      //end of iterations,return to agent thread who returns to main
       break;
+    
     } else {
       if (pool->matchAvail && pool->paperAvail) {
         VERBOSE_PRINT("signalling tobacco\n");
         uthread_cond_signal(agent->tobacco);
+
       } else if (pool->matchAvail && pool->tobacAvail) {
         VERBOSE_PRINT ("signalling paper\n");
         uthread_cond_signal(agent->paper);
+        
       } else if (pool->paperAvail && pool->tobacAvail) {
         VERBOSE_PRINT ("signalling match\n");
         uthread_cond_signal(agent->match);
       }
     }
   }
-  
+
   uthread_mutex_unlock(agent->mutex);
 }
 
 int main (int argc, char** argv) {
   uthread_init (7);
+  //all smokers have access to one agent, which holds the mutex and all condition variables
   struct Agent*  a = createAgent();
+
+  //all smokers have access to one resource pool
   struct ResourcePool* p = createResourcePool(a);
-  // TODO
+
+  VERBOSE_PRINT ("creating threads\n");
   uthread_t tobac = uthread_create(smoker, createSmoker(TOBACCO, p, a));
   uthread_t paper = uthread_create(smoker, createSmoker(PAPER, p, a));
   uthread_t match = uthread_create(smoker, createSmoker(MATCH, p, a));
+
+  VERBOSE_PRINT ("joining threads\n");
   uthread_join (uthread_create (agent, p), 0);
+  //We only need to join the agent thread because the smoker threads
+  //are dependent on the agent thread. Once the agent thread terminates,
+  //the smoker threads will terminate too.
 
   assert (signal_count [MATCH]   == smoke_count [MATCH]);
   assert (signal_count [PAPER]   == smoke_count [PAPER]);
