@@ -6,7 +6,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 
-#define NUM_ITERATIONS 5
+#define NUM_ITERATIONS 2
 
 #ifdef VERBOSE
 #define VERBOSE_PRINT(S, ...) printf (S, ##__VA_ARGS__);
@@ -23,11 +23,14 @@ struct Agent{
 };
 
 struct ResourcePool {
+  struct Agent* agent;
   bool matchAvail;
   bool paperAvail;
   bool tobacAvail;
-  struct Agent* agent;
   bool waitingToSmoke;
+  bool matchWaiting;
+  bool tobacWaiting;
+  bool paperWaiting;
 };
 
 struct Smoker{
@@ -61,6 +64,9 @@ struct ResourcePool* createResourcePool (struct Agent* a) {
   pool->tobacAvail = false;
   pool->agent = a;
   pool->waitingToSmoke = true;
+  pool->matchWaiting = false;
+  pool->paperWaiting = false;
+  pool->tobacWaiting = false;
   return pool;
 }
 
@@ -76,6 +82,18 @@ char* resource_name [] = {"", "match",   "paper", "", "tobacco"};
 int signal_count [5];  // # of times resource signalled
 int smoke_count  [5];  // # of times smoker with resource smoked
 int numIter = 0;
+
+void resetWaitingValues(struct ResourcePool* pool) {
+  pool->paperWaiting = false;
+  pool->matchWaiting = false;
+  pool->tobacWaiting = false;
+}
+
+void resetValues (struct ResourcePool* pool) {
+  pool->tobacAvail = false;
+  pool->paperAvail = false;
+  pool->matchAvail = false;
+}
 /**
  * This is the agent procedure.  It is complete and you shouldn't change it in
  * any material way.  You can re-write it if you like, but be sure that all it does
@@ -92,6 +110,7 @@ void* agentLock (void* pv) {
   pthread_mutex_lock(&a->mutex);
   for (int i = 0; i < NUM_ITERATIONS; i++) {
     VERBOSE_PRINT("\nIteration: %d\n----------\n", i);
+    resetWaitingValues(pool);
     int r = random() % 3;
     signal_count [matching_smoker [r]] ++;
     int c = choices [r];
@@ -115,10 +134,8 @@ void* agentLock (void* pv) {
     }
     
     numIter++;
-    while (pool->waitingToSmoke){
-      VERBOSE_PRINT ("agent is waiting for smoker to smoke\n"); 
-      pthread_cond_wait (&a->smoke, &a->mutex);
-    }
+    VERBOSE_PRINT ("agent is waiting for smoker to smoke\n"); 
+    pthread_cond_wait (&a->smoke, &a->mutex);
   }
   pthread_mutex_unlock(&a->mutex);
   return NULL;
@@ -131,63 +148,74 @@ void* smokerLock (void* av) {
 
   pthread_mutex_lock (&agent->mutex);
   while (1) {
-
     //while loop runs the same amount of times as the agent
     if (smoker->smokeMethod == MATCH) {
-      VERBOSE_PRINT ("match smoker waiting for matches\n");
-      pthread_cond_wait(&agent->match, &agent->mutex); //wait until agent decides match is available
       
       if (pool->tobacAvail && pool->paperAvail) {
         //match smoker has all resources needed
-        pool->tobacAvail = false;
-        pool->paperAvail = false;
-        pool->matchAvail = false;
+        VERBOSE_PRINT ("Match can smoke!\n");
+        resetValues(pool);
         smoke_count[smoker->smokeMethod]++;
         pool->waitingToSmoke = false;
         VERBOSE_PRINT ("match smoking\n");
         pthread_cond_signal(&agent->smoke); //signal that match is smoking
+      } else {
+        VERBOSE_PRINT ("match smoker waiting\n");
+        pool->matchWaiting = true;
+        pthread_cond_wait(&agent->match, &agent->mutex); //wait until agent decides match is available
       }
     
     }else if (smoker->smokeMethod == PAPER) {
-      VERBOSE_PRINT ("paper smoker waiting for paper\n"); 
-      pthread_cond_wait(&agent->paper, &agent->mutex);
       
       if (pool->matchAvail && pool->tobacAvail) {
         //paper smoker has all resources needed
-        pool->matchAvail = false;
-        pool->tobacAvail = false;
-        pool->paperAvail = false;
+        VERBOSE_PRINT ("paper can smoke!\n");
+        resetValues(pool);
         smoke_count[smoker->smokeMethod]++;
         pool->waitingToSmoke = false;
         VERBOSE_PRINT ("paper smoking\n");
         pthread_cond_signal(&agent->smoke); //signal that paper is smoking
+      } else {
+        VERBOSE_PRINT ("paper smoker waiting\n"); 
+        pool->paperWaiting = true;
+        pthread_cond_wait(&agent->paper, &agent->mutex);
       }
 
     }else if (smoker->smokeMethod == TOBACCO) {
-      VERBOSE_PRINT ("tobacco smoker waiting for tobacco\n");
-      pthread_cond_wait(&agent->tobacco, &agent->mutex);
 
       if (pool->matchAvail && pool->paperAvail) {
         //tobacco smoker has all resources needed
-        pool->matchAvail = false;
-        pool->paperAvail = false;
-        pool->tobacAvail = false;
+        VERBOSE_PRINT ("Tobacco can smoke!\n");
+        resetValues(pool);
         smoke_count[smoker->smokeMethod]++;
         pool->waitingToSmoke = false;
         VERBOSE_PRINT ("tobacco smoking\n");
         pthread_cond_signal(&agent->smoke); //signal that tobacco is smoking
+      } else {
+        VERBOSE_PRINT ("tobacco smoker waiting\n");
+        pool->tobacWaiting = true;
+        pthread_cond_wait(&agent->tobacco, &agent->mutex);
       }
 
     }
-    if (pool->matchAvail && pool->paperAvail) {
-      pthread_cond_signal(&agent->tobacco);
-    } else if (pool->matchAvail && pool->tobacAvail) {
-      pthread_cond_signal(&agent->paper);
-    } else if (pool->paperAvail && pool->tobacAvail) {
-      pthread_cond_signal(&agent->match);
+    if (pool->matchWaiting && pool->paperWaiting && pool->tobacWaiting && (numIter == NUM_ITERATIONS)) {
+      //end of iterations, go back to main
+      break;
+    } else {
+      if (pool->matchAvail && pool->paperAvail) {
+        VERBOSE_PRINT("signalling tobacco\n");
+        pthread_cond_signal(&agent->tobacco);
+      } else if (pool->matchAvail && pool->tobacAvail) {
+        VERBOSE_PRINT ("signalling paper\n");
+        pthread_cond_signal(&agent->paper);
+      } else if (pool->paperAvail && pool->tobacAvail) {
+        VERBOSE_PRINT ("signalling match\n");
+        pthread_cond_signal(&agent->match);
+      }
     }
   }
   pthread_mutex_unlock(&agent->mutex);
+  return NULL;
 }
 
 int main (int argc, char** argv) {
