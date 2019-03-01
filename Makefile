@@ -8,15 +8,15 @@ UTHREAD = .
 # TARGETS = smoke_pthread
 # OBJS = $(UTHREAD)/smoke_pthread
 
-TARGETS = pc_sem_pthread 
-OBJS = $(UTHREAD)/pc_sem_pthread.o 
+# TARGETS = pc_sem_pthread 
+# OBJS = $(UTHREAD)/pc_sem_pthread.o 
 
-# TARGETS = pc_mutex_cond_pthread
-# OBJS = $(UTHREAD)/pc_mutex_cond_pthread.o
+TARGETS = pc_mutex_cond_pthread
+OBJS = $(UTHREAD)/pc_mutex_cond_pthread.o
 # ------------------------------------------------------------
 JUNKF = $(OBJS) *~
 JUNKD = *.dSYM
-CFLAGS  += -g -std=gnu11 -D VERBOSE -I$(UTHREAD)
+CFLAGS  += -g -std=gnu11 -I$(UTHREAD)
 UNAME = $(shell uname)
 ifeq ($(UNAME), Linux)
 LDFLAGS += -pthread
