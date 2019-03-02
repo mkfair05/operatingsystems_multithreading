@@ -1,6 +1,6 @@
 FOLDER = .
 
-TARGETS =   pc_mutex_cond_pthread pc_sem_pthread smoke_pthread pc_spinlock pc_sem_uthread pc_mutex_cond_uthread pc_sem_uthread
+TARGETS =   pc_mutex_cond_pthread pc_sem_pthread smoke_pthread pc_spinlock pc_sem_uthread pc_mutex_cond_uthread pc_sem_uthread smoke_uthread
 
 OBJS = $(FOLDER)/uthread.o \
 		$(FOLDER)/uthread_mutex_cond.o \
@@ -8,7 +8,7 @@ OBJS = $(FOLDER)/uthread.o \
 # ------------------------------------------------------------
 JUNKF = $(FOLDER) *~
 JUNKD = *.dSYM
-CFLAGS  += -g -std=gnu11 -D VERBOSE -I$(FOLDER)
+CFLAGS  += -g -std=gnu11 -I$(FOLDER)
 UNAME = $(shell uname)
 ifeq ($(UNAME), Linux)
 LDFLAGS += -pthread
