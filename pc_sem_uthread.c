@@ -4,6 +4,16 @@
 #include "uthread.h"
 #include "uthread_sem.h"
 
+/*
+* Meghan Fair
+* V00839675
+* 
+* UVic CSC 360 - Spring 2019
+* 
+* Implementation of the producer consumer problem using uthreads
+* with semaphores.
+*
+*/
 
 #ifdef VERBOSE
 #define VERBOSE_PRINT(S, ...) printf (S, ##__VA_ARGS__);
