@@ -9,7 +9,7 @@
             "name": "(gdb) Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/pc_sem_pthread",
+            "program": "${workspaceFolder}/pc_sem_uthread",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

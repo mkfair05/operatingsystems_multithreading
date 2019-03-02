@@ -4,6 +4,13 @@
 #include "uthread.h"
 #include "uthread_sem.h"
 
+
+#ifdef VERBOSE
+#define VERBOSE_PRINT(S, ...) printf (S, ##__VA_ARGS__);
+#else
+#define VERBOSE_PRINT(S, ...) ;
+#endif
+
 #define MAX_ITEMS 10
 const int NUM_ITERATIONS = 200;
 const int NUM_CONSUMERS  = 2;
@@ -13,16 +20,16 @@ int histogram [MAX_ITEMS+1]; // histogram [i] == # of times list stored i items
 
 int items = 0;
 
-uthread_sem_t  semLock = uthread_sem_create(1); //init open semaphore for locking/unlocking
-uthread_sem_t  isFull = uthread_sem_create(MAX_ITEMS);
-uthread_sem_t  isEmpty = uthread_sem_create(0);
+uthread_sem_t notFull, notEmpty;
 
 void inc() {
   items++;
+  VERBOSE_PRINT("items = %d\n", items);
 }
 
 void dec() {
   items--;
+  VERBOSE_PRINT("items = %d\n", items);
 }
 
 void addToHistogram(int index) {
@@ -32,31 +39,30 @@ void addToHistogram(int index) {
 void* producer (void* v) {
   for (int i=0; i<NUM_ITERATIONS; i++) {
     
-    uthread_sem_wait(&isFull); //decrement/block
+    VERBOSE_PRINT("producer locking semaphore\n");
+    uthread_sem_wait(notFull); //decrement/block
 
-    uthread_sem_wait(&semLock); //lock thread
-    
-    assert(items < MAX_ITEMS);
+    VERBOSE_PRINT("increment items\n");
     inc();
     addToHistogram(items);
 
-    uthread_sem_signal(&isFull); //inc/unblock
-    uthread_sem_signal(&semLock); //unlock thread
+    VERBOSE_PRINT("producer unlocking semaphore\n");
+    uthread_sem_signal(notEmpty); //inc/unblock
   }
   return NULL;
 }
 
 void* consumer (void* v) {
   for (int i=0; i<NUM_ITERATIONS; i++) {
-    uthread_sem_wait(isEmpty);
-    uthread_sem_wait(semLock);
-
-    assert(items > 0);
+    VERBOSE_PRINT("consumer locking semaphore\n");
+    uthread_sem_wait(notEmpty); //wait until semaphore is >0
+    
+    VERBOSE_PRINT("decrementing items\n");
     dec();
     addToHistogram(items);
 
-    uthread_sem_signal(isEmpty);
-    uthread_sem_signal(semLock);
+    VERBOSE_PRINT("consumer unlocking semaphore\n");
+    uthread_sem_signal(notFull); //indicate that the producer is allowed to produce
   }
   return NULL;
 }
@@ -66,10 +72,31 @@ int main (int argc, char** argv) {
 
   uthread_init (4);
 
+  notFull = uthread_sem_create(MAX_ITEMS);
+  notEmpty = uthread_sem_create(0);
+  VERBOSE_PRINT("creating consumers\n");
+  int i;
+  
+  for (i=0; i < NUM_CONSUMERS; i++) {
+    //creates two consumers
+    t[i] = uthread_create(consumer, NULL);
+  }
 
-  // TODO: Create Threads and Join
+  VERBOSE_PRINT("creating producers\n");
+  for (i=0; i < NUM_PRODUCERS; i++) {
+    //creates two producers
+    t[i+NUM_CONSUMERS] = uthread_create(producer, NULL);
+  }
 
-  printf ("items value histogram:\n");
+  VERBOSE_PRINT("joining threads\n");
+  for (i = 0; i < NUM_CONSUMERS+NUM_PRODUCERS; i++) {
+    //joins threads
+    void *joinThreads;
+    uthread_join(t[i], &joinThreads);
+  }
+
+
+  printf ("\nitems value histogram:\n");
   int sum=0;
   for (int i = 0; i <= MAX_ITEMS; i++) {
     printf ("  items=%d, %d times\n", i, histogram [i]);
